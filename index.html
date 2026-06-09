@@ -2,13 +2,26 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Life HQ</title>
+
+<!-- PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Life HQ">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#FFFDF7">
+<meta name="description" content="Your personal life planning and habit tracking system">
+
+<!-- App icons (inline SVG favicon) -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23FF6B6B'/><text y='.9em' font-size='72' x='50%' text-anchor='middle' dominant-baseline='hanging'>✨</text></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23FF6B6B'/><text y='.9em' font-size='72' x='50%' text-anchor='middle' dominant-baseline='hanging'>✨</text></svg>">
+
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#FFFDF7;--surface:#fff;--border:#E8E0D0;--text:#1A1510;--text2:#6B5E4E;--text3:#9B8E7E;--accent:#FF6B6B}
-body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;min-height:-webkit-fill-available;padding-bottom:env(safe-area-inset-bottom)}
 
 /* TOP BAR */
 .topbar{background:var(--surface);border-bottom:2px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -1199,6 +1212,70 @@ function dl(html,name) { const a=document.createElement('a'); a.href=URL.createO
 
 // ─── INIT ────────────────────────────────────
 // Initial render happens inside loadFromSupabase() above
+</script>
+<!-- PWA: inline manifest and service worker -->
+<script>
+// Register inline service worker for offline support
+const swCode = `
+const CACHE = 'lifehq-v1';
+self.addEventListener('install', e => { self.skipWaiting(); });
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys =>
+    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+  ));
+  self.clients.claim();
+});
+self.addEventListener('fetch', e => {
+  // Never intercept Supabase API calls or external requests
+  const url = new URL(e.request.url);
+  if (url.hostname.includes('supabase.co') ||
+      url.hostname.includes('googleapis.com') ||
+      url.hostname.includes('gstatic.com')) {
+    return; // let browser handle normally
+  }
+  // For the app itself, try network first, fall back to cache
+  e.respondWith(
+    fetch(e.request)
+      .then(res => {
+        const clone = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, clone));
+        return res;
+      })
+      .catch(() => caches.match(e.request))
+  );
+});`;
+
+if ('serviceWorker' in navigator) {
+  const blob = new Blob([swCode], {type: 'application/javascript'});
+  const swUrl = URL.createObjectURL(blob);
+  navigator.serviceWorker.register(swUrl).catch(() => {});
+}
+
+// Inject web app manifest dynamically
+const manifest = {
+  name: 'Life HQ',
+  short_name: 'Life HQ',
+  description: 'Your personal life planning and habit tracking system',
+  start_url: window.location.href,
+  display: 'standalone',
+  orientation: 'portrait',
+  background_color: '#FFFDF7',
+  theme_color: '#FF6B6B',
+  icons: [
+    {
+      src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='112' fill='%23FF6B6B'/><text y='0.9em' font-size='360' x='50%' text-anchor='middle' dominant-baseline='hanging'>✨</text></svg>",
+      sizes: '512x512',
+      type: 'image/svg+xml',
+      purpose: 'any maskable'
+    }
+  ]
+};
+const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+const manifestUrl = URL.createObjectURL(manifestBlob);
+const manifestLink = document.createElement('link');
+manifestLink.rel = 'manifest';
+manifestLink.href = manifestUrl;
+document.head.appendChild(manifestLink);
 </script>
 </body>
 </html>
